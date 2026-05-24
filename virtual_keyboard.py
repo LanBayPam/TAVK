@@ -50,19 +50,17 @@ START_X = 229                         # (1280 - (10*75 + 9*8)) // 2 = 229  → c
 START_Y = 255                         # keyboard di bagian bawah layar
 STEP    = KEY_W + GAP                 # 83 px per sel
 
-NUM_ROW    = ["1","2","3","4","5","6","7","8","9","0"]
 ALPHA_ROWS = [
     ["Q","W","E","R","T","Y","U","I","O","P"],
     ["A","S","D","F","G","H","J","K","L",";"],
     ["Z","X","C","V","B","N","M",",",".","/"],
 ]
+NUM_ROW  = ["1","2","3","4","5","6","7","8","9","0"]
+SYM_ROW1 = ["!","@","#","$","%","^","&","*","(",")"]
+SYM_ROW2 = ["-","_","=","+","[","]","{","}","|","\\"]
 
-# Karakter yang muncul saat SHIFT aktif
-SHIFT_MAP = {
-    "1":"!", "2":"@", "3":"#", "4":"$", "5":"%",
-    "6":"^", "7":"&", "8":"*", "9":"(", "0":")",
-    ";":":", ",":"<", ".":">", "/":"?",
-}
+# SHIFT hanya berlaku di ABC keyboard (huruf + tanda baca)
+SHIFT_MAP = {";":":", ",":"<", ".":">", "/":"?"}
 
 # Threshold interaksi
 FLICK_THRESHOLD = 28   # px ke bawah dalam FLICK_WINDOW frame = flick
@@ -100,39 +98,45 @@ class Button:
         return self.x < px < self.x + self.w and self.y < py < self.y + self.h
 
 
-def build_keyboard() -> list:
-    """Buat semua Button untuk layout keyboard lengkap."""
-    btns = []
+def build_abc() -> list:
+    """Keyboard huruf: 3 baris QWERTY + baris bawah (CAPS/SHIFT/SPC/DEL/123)."""
+    btns  = []
+    kbd_w = 10 * KEY_W + 9 * GAP           # 822 px
 
-    # Baris 0 – angka
-    for i, k in enumerate(NUM_ROW):
-        btns.append(Button(START_X + i * STEP, START_Y, k))
-
-    # Baris 1-3 – huruf
     for ri, row in enumerate(ALPHA_ROWS):
         for ci, k in enumerate(row):
-            btns.append(Button(START_X + ci * STEP,
-                               START_Y + (ri + 1) * STEP, k))
+            btns.append(Button(START_X + ci * STEP, START_Y + ri * STEP, k))
 
-    # Baris 4 – tombol khusus
-    # Total lebar keyboard = 10*65 + 9*6 = 704 px
-    # CAPS(65) + SHIFT(136) + SPC(207) + DEL(136) + SAVE(136) = 680 + 4*6 = 704
-    by      = START_Y + 4 * STEP
-    kbd_w   = 10 * KEY_W + 9 * GAP    # 704
-
-    caps_w  = KEY_W                    # 65
-    shift_w = KEY_W * 2 + GAP         # 136
-    spc_w   = KEY_W * 3 + GAP * 2     # 207
-    del_w   = KEY_W * 2 + GAP         # 136
-    save_w  = kbd_w - caps_w - shift_w - spc_w - del_w - 4 * GAP  # 136
-
+    # Baris bawah: CAPS(75) SHIFT(75) SPC(490) DEL(75) 123(75) + 4×GAP = 822
+    by     = START_Y + 3 * STEP
+    spc_w  = kbd_w - 4 * KEY_W - 4 * GAP  # 490
     x = START_X
-    btns.append(Button(x, by, "CAPS",  w=caps_w));  x += caps_w  + GAP
-    btns.append(Button(x, by, "SHIFT", w=shift_w)); x += shift_w + GAP
-    btns.append(Button(x, by, "SPC",   w=spc_w));   x += spc_w   + GAP
-    btns.append(Button(x, by, "DEL",   w=del_w));   x += del_w   + GAP
-    btns.append(Button(x, by, "SAVE",  w=save_w))
+    btns.append(Button(x, by, "CAPS",  w=KEY_W));  x += KEY_W  + GAP
+    btns.append(Button(x, by, "SHIFT", w=KEY_W));  x += KEY_W  + GAP
+    btns.append(Button(x, by, "SPC",   w=spc_w));  x += spc_w  + GAP
+    btns.append(Button(x, by, "DEL",   w=KEY_W));  x += KEY_W  + GAP
+    btns.append(Button(x, by, "123",   w=KEY_W))
+    return btns
 
+
+def build_123() -> list:
+    """Keyboard angka/simbol: 3 baris + baris bawah (SAVE/SPC/DEL/ABC)."""
+    btns  = []
+    kbd_w = 10 * KEY_W + 9 * GAP           # 822 px
+
+    for ri, row in enumerate([NUM_ROW, SYM_ROW1, SYM_ROW2]):
+        for ci, k in enumerate(row):
+            btns.append(Button(START_X + ci * STEP, START_Y + ri * STEP, k))
+
+    # Baris bawah: SAVE(158) SPC(407) DEL(75) ABC(158) + 3×GAP = 822
+    by     = START_Y + 3 * STEP
+    dbl    = KEY_W * 2 + GAP               # 158 px (lebar 2 tombol)
+    spc_w  = kbd_w - 2 * dbl - KEY_W - 3 * GAP  # 407
+    x = START_X
+    btns.append(Button(x, by, "SAVE", w=dbl));   x += dbl   + GAP
+    btns.append(Button(x, by, "SPC",  w=spc_w)); x += spc_w + GAP
+    btns.append(Button(x, by, "DEL",  w=KEY_W)); x += KEY_W + GAP
+    btns.append(Button(x, by, "ABC",  w=dbl))
     return btns
 
 
@@ -191,8 +195,8 @@ def draw_keyboard(frame, buttons, hover_set, click_set,
                   typed, caps, shift, dwell_mode, dwell_label, dwell_frac):
     """Render keyboard virtual + text box ke frame."""
 
-    kbd_x2 = START_X + 10 * STEP - GAP + 10
-    kbd_y2 = START_Y +  5 * STEP - GAP + 10
+    kbd_x2 = max(btn.x + btn.w for btn in buttons) + 10
+    kbd_y2 = max(btn.y + btn.h for btn in buttons) + 10
 
     # Latar belakang semi-transparan
     overlay = frame.copy()
@@ -272,16 +276,17 @@ def draw_finger_ui(frame, itip, mtip, hover, last_click_t, now):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.52, arc_col, 1)
 
 
-def draw_hud(frame, fps, confidences, dwell_mode, caps, shift):
+def draw_hud(frame, fps, confidences, dwell_mode, caps, shift, kboard_mode):
     """HUD bagian atas: FPS, jumlah tangan, mode, status modifier."""
     mode   = "DWELL" if dwell_mode else "FLICK"
     caps_s = "  [CAPS]"  if caps  else ""
     shft_s = "  [SHIFT]" if shift else ""
 
-    kb_s = "  [KB:OS]" if _pynput else "  [KB:OCV]"
+    kb_s    = "  [KB:OS]" if _pynput else "  [KB:OCV]"
+    layout_s = "  [123]" if kboard_mode == "123" else "  [ABC]"
     cv2.putText(
         frame,
-        f"FPS:{fps:4.1f}   Hands:{len(confidences)}   Mode:{mode}{caps_s}{shft_s}{kb_s}"
+        f"FPS:{fps:4.1f}   Hands:{len(confidences)}   Mode:{mode}{layout_s}{caps_s}{shft_s}{kb_s}"
         f"   |   D=toggle   ESC/Q=quit",
         (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.54, (180, 210, 255), 1,
     )
@@ -313,11 +318,13 @@ def main():
     cv2.setWindowProperty("AI Virtual Keyboard", cv2.WND_PROP_FULLSCREEN,
                           cv2.WINDOW_FULLSCREEN)
 
-    buttons    = build_keyboard()
-    typed      = ""
-    caps_lock  = False
-    shift_act  = False
-    dwell_mode = False
+    buttons_abc = build_abc()
+    buttons_123 = build_123()
+    kboard_mode = "abc"              # "abc" atau "123"
+    typed       = ""
+    caps_lock   = False
+    shift_act   = False
+    dwell_mode  = False
 
     # State per tangan (maks 2)
     last_click  = [0.0, 0.0]
@@ -341,6 +348,8 @@ def main():
         ok, frame = cap.read()
         if not ok:
             continue
+
+        buttons = buttons_abc if kboard_mode == "abc" else buttons_123
 
         frame = cv2.flip(frame, 1)
         h, w  = frame.shape[:2]
@@ -413,8 +422,12 @@ def main():
                         click_until[hi] = now + 0.18
                         click_set.add(hov)
                         mtip_history[hi].clear()   # reset agar tidak langsung re-fire
-                        typed, caps_lock, shift_act, _ = apply_key(
-                            hov, typed, caps_lock, shift_act)
+                        if hov in ("123", "ABC"):
+                            kboard_mode = "123" if hov == "123" else "abc"
+                            dwell_label = None
+                        else:
+                            typed, caps_lock, shift_act, _ = apply_key(
+                                hov, typed, caps_lock, shift_act)
 
         # ── Mode Dwell (hanya tangan pertama) ─────────────────────────────
         dwell_frac = 0.0
@@ -435,11 +448,15 @@ def main():
                     click_until[0] = now + 0.18
                     click_set.add(hov)
                     dwell_start = now      # reset agar tidak langsung re-fire
-                    typed, caps_lock, shift_act, _ = apply_key(
-                        hov, typed, caps_lock, shift_act)
+                    if hov in ("123", "ABC"):
+                        kboard_mode = "123" if hov == "123" else "abc"
+                        dwell_label = None
+                    else:
+                        typed, caps_lock, shift_act, _ = apply_key(
+                            hov, typed, caps_lock, shift_act)
 
         # ── Render ────────────────────────────────────────────────────────
-        draw_hud(frame, fps, confidences, dwell_mode, caps_lock, shift_act)
+        draw_hud(frame, fps, confidences, dwell_mode, caps_lock, shift_act, kboard_mode)
 
         draw_keyboard(frame, buttons, hover_set, click_set,
                       typed, caps_lock, shift_act,
